@@ -1,0 +1,7 @@
+# Variables de entorno (secretos, credenciales)
+.env
+.env.*
+!.env.example
+
+# Archivos comprimidos grandes (límite GitHub: 100 MB)
+*.zip
