@@ -15,10 +15,10 @@ class DepositsModel extends Model {
     protected $useTimestamps = true;
 
     public function paypalPayment($paymentID, $paymentToken, $payerID, $paypalClientID, $paypalSecret) {
-        $paypal = json_decode(systemGet('paypal'), true);
-        $paypalEnv = 'production';
+        $paypalCredentials = paypalCredentials();
+        $paypalEnv = $paypalCredentials['env'];
 
-        $paypalURL = ($paypalEnv == 'sandbox') ? 'https://api-m.sandbox.paypal.com/v1' : 'https://api-m.paypal.com/v1/';
+        $paypalURL = ($paypalEnv == 'sandbox') ? 'https://api-m.sandbox.paypal.com/v1/' : 'https://api-m.paypal.com/v1/';
 
         // Obtener token de acceso
         $ch = curl_init();

@@ -1857,6 +1857,15 @@ class Playings extends Controller {
         if (!$game) {
             return $this->response->setJSON(['status' => 'error', 'message' => translate('there are no active games')]);
         }
+
+        if (!in_array((int) $game['type'], [3, 4], true)) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'El chat solo está habilitado en transmisiones en vivo.']);
+        }
+
+        $allowedReactions = ['😊', '😢', '🤯', '😂', '😍', '🥺', '🤔', '🙄', '🧐', '😘', '😜', '😅', '😨', '😎', '🤪', '😲', '😒', '😛', '😓', '🥳'];
+        if (!in_array($message, $allowedReactions, true)) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Solo se permiten reacciones predeterminadas.']);
+        }
     
         $data = [
             'user' => session()->get('id'),
@@ -1883,6 +1892,13 @@ class Playings extends Controller {
         if (!$game) {
             return $this->response->setStatusCode(404)->setJSON([
                 'status' => 'stop', 'message' => translate('there are no active games')
+            ]);
+        }
+
+        if (!in_array((int) $game['type'], [3, 4], true)) {
+            return $this->response->setJSON([
+                'status' => 'empty',
+                'messages' => [],
             ]);
         }
 

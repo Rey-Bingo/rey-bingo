@@ -26,14 +26,43 @@ $kycLabels = [
                 <?= csrf_field(); ?>
                 <div class="mb-2">
                     <label class="form-label small">Documento (frente)</label>
-                    <input type="file" name="kyc_front" class="form-control form-control-sm" accept="image/*" required>
+                    <div class="d-flex gap-2 align-items-center">
+                        <input type="file" id="kyc_front" name="kyc_front" class="form-control form-control-sm" accept="image/*" required>
+                        <button type="button" id="clear-kyc-front" class="btn btn-sm btn-outline-secondary d-none">Quitar</button>
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label small">Documento (reverso)</label>
-                    <input type="file" name="kyc_back" class="form-control form-control-sm" accept="image/*" required>
+                    <div class="d-flex gap-2 align-items-center">
+                        <input type="file" id="kyc_back" name="kyc_back" class="form-control form-control-sm" accept="image/*" required>
+                        <button type="button" id="clear-kyc-back" class="btn btn-sm btn-outline-secondary d-none">Quitar</button>
+                    </div>
                 </div>
                 <button type="submit" class="btn btn-primary btn-bingo btn-sm">Enviar documentos</button>
             <?= form_close(); ?>
+            <script>
+                (function() {
+                    function setupClearButton(inputId, buttonId) {
+                        var input = document.getElementById(inputId);
+                        var button = document.getElementById(buttonId);
+                        if (!input || !button) {
+                            return;
+                        }
+
+                        input.addEventListener('change', function() {
+                            button.classList.toggle('d-none', !input.files || input.files.length === 0);
+                        });
+
+                        button.addEventListener('click', function() {
+                            input.value = '';
+                            button.classList.add('d-none');
+                        });
+                    }
+
+                    setupClearButton('kyc_front', 'clear-kyc-front');
+                    setupClearButton('kyc_back', 'clear-kyc-back');
+                })();
+            </script>
         <?php else: ?>
             <p class="small text-success mb-0"><i class="fa-duotone fa-solid fa-circle-check me-1"></i> Tu cuenta está verificada.</p>
         <?php endif; ?>

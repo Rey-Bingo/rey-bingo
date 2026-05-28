@@ -600,6 +600,7 @@
     </div>
 <?php endif; ?>
 
+<?php if ($game['type'] == 3 || $game['type'] == 4): ?>
 <button class="btn btn-small btn-chat" id="toggle-messages-btn"><i class="fa-duotone fa-solid fa-comments-question"></i></button>
 
 <div class="message-display-container" id="message-display-container" aria-hidden="true">
@@ -633,17 +634,10 @@
             <button type="button" class="emoji-btn" onclick="sendEmoji('😓', 19)">😓</button>
         </div>
 
-        <div class="message-bubble-slider">
-            <button type="button" class="message-btn" onclick="sendMessage('<?= translate('hello!'); ?> 🥰', 20)"><?= translate('hello!'); ?> 🥰</button>
-            <button type="button" class="message-btn" onclick="sendMessage('<?= translate('bingo!'); ?> 🥳', 21)"><?= translate('bingo!'); ?> 🥳</button>
-            <button type="button" class="message-btn" onclick="sendMessage('<?= translate('ha ha ha'); ?> 🤣', 22)"><?= translate('ha ha ha'); ?> 🤣</button>
-            <button type="button" class="message-btn" onclick="sendMessage('<?= translate('lets have fun!'); ?> 😉', 23)"><?= translate('lets have fun!'); ?> 😉</button>
-            <button type="button" class="message-btn" onclick="sendMessage('<?= translate('good luck!'); ?> 🤑', 24)"><?= translate('good luck!'); ?> 🤑</button>
-            <button type="button" class="message-btn" onclick="sendMessage('<?= translate('im missing a number'); ?> 🤩', 25)"><?= translate('im missing a number'); ?> 🤩</button>
-        </div>
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 
 <div class="modal fade" id="modalBoard" tabindex="-1">

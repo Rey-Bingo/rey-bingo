@@ -555,29 +555,7 @@ function sendEmoji(content, id) {
 
 // Función para enviar mensaje desde el campo de texto
 function sendMessageText() {
-    const inputField = $id('message-send-new');
-    if (!inputField) return;
-    const raw = inputField.value || '';
-    const trimmed = raw.trim();
-    if (!trimmed) return;
-
-    // No permitir emoticones/pictogramas al escribir. Las reacciones se envían con los botones.
-    let emojiRegex = null;
-    try {
-        emojiRegex = /\p{Extended_Pictographic}/u;
-    } catch (e) {
-        // Fallback para navegadores sin soporte de propiedades unicode.
-        emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
-    }
-
-    const sanitized = trimmed.replace(emojiRegex, '').trim();
-    if (!sanitized) {
-        inputField.value = '';
-        return;
-    }
-
-    sendMessage(sanitized);
-    inputField.value = '';
+    return;
 }
 
 // ==========================================
@@ -1113,7 +1091,7 @@ function singBingo() {
                 // Detener el intervalo de obtención de números
                 intervalManager.clear('lastNumber');
 
-                sendMessage((__['bingo!'] || 'BINGO!') + ' 🥳', 21);
+                sendEmoji('🥳', 21);
 
                 // Marcar números ganadores en el cartón
                 const cartonElement = document.getElementById(`carton-${data.carton}`);
@@ -1198,14 +1176,20 @@ function RemoveCheck() {
 // ==========================================
 function setupEvents() {
     // Eventos de mensajes mejorados
-    $('#message-button').on('click', sendMessageText);
+    const messageButton = $('#message-button');
+    if (messageButton.length) {
+        messageButton.on('click', sendMessageText);
+    }
     
-    $('#message-send-new').on('keypress', (e) => {
-        if (e.which === 13) {
-            e.preventDefault();
-            sendMessageText();
-        }
-    });
+    const messageInput = $('#message-send-new');
+    if (messageInput.length) {
+        messageInput.on('keypress', (e) => {
+            if (e.which === 13) {
+                e.preventDefault();
+                sendMessageText();
+            }
+        });
+    }
 
     // Eventos para emojis (si tienes botones de emoji)
     $('.emoji-button').on('click', function() {
@@ -1811,9 +1795,14 @@ function initializeApp() {
     // Configurar countdown del juego
     setupGameCountdown();
     
-    // Iniciar polling de mensajes
-    messagePoller.lastCallback = pollMessagesOptimized;
-    messagePoller.poll(pollMessagesOptimized);
+    // Iniciar polling de mensajes solo cuando el panel de chat existe (transmisiones en vivo)
+    const hasChatPanel = !!$id("message-display-container");
+    if (hasChatPanel) {
+        messagePoller.lastCallback = pollMessagesOptimized;
+        messagePoller.poll(pollMessagesOptimized);
+    } else {
+        messagePoller.stop();
+    }
     
     // Iniciar contador de usuarios
     /*intervalManager.set('userCount', updateUserCount, CONFIG.USER_COUNT_INTERVAL);

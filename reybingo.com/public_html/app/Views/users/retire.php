@@ -5,6 +5,26 @@
             <button class="btn-close me-1" type="button" aria-label="close" data-bs-dismiss="modal"><i class="fa-duotone fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body pt-0">
+            <?php
+                $kycVerified = wallet_kyc_allows_withdraw($user);
+                $kycMessage = wallet_kyc_withdraw_message($user);
+                $kycActionLabel = wallet_kyc_action_label($user);
+            ?>
+            <?php if (! $kycVerified): ?>
+                <div id="retire-kyc-alert" class="alert alert-warning border-0 mb-3 py-3" role="alert" style="border-radius: 12px;">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="fa-duotone fa-solid fa-id-card fs-4 mt-1"></i>
+                        <div class="flex-grow-1">
+                            <strong class="d-block mb-1">Verificación de identidad requerida</strong>
+                            <p class="small mb-2"><?= esc($kycMessage); ?></p>
+                            <a href="<?= site_url('kyc'); ?>" class="btn btn-sm btn-primary btn-bingo">
+                                <?= esc($kycActionLabel); ?>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <?php echo form_open(site_url() . 'payments/retireSubmit', array('enctype' => 'multipart/form-data', 'id' => 'retire-form'));?>
                 
                 <?= csrf_field() ?>
@@ -100,7 +120,7 @@
                 </div>
 
                 <div class="col-md-12">
-                    <button type="submit" class="btn btn-primary d-block w-50 btn-bingo mt-2" id="retire-button"><?= translate('send'); ?></button>
+                    <button type="submit" class="btn btn-primary d-block w-50 btn-bingo mt-2" id="retire-button"<?= ! $kycVerified ? ' disabled' : ''; ?>><?= translate('send'); ?></button>
                 </div>
             <?= form_close(); ?>
 
@@ -153,6 +173,20 @@
                             gravity: "top",
                             position: "right",
                             style: { background: "#dc3545" },
+                            stopOnFocus: true
+                        }).showToast();
+                    } else if (response.kyc_required) {
+                        const kycAlert = document.getElementById('retire-kyc-alert');
+                        if (kycAlert) {
+                            kycAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            kycAlert.classList.add('border', 'border-danger');
+                        }
+                        Toastify({
+                            text: response.message || 'Debes verificar tu identidad antes de retirar.',
+                            duration: 5000,
+                            gravity: "top",
+                            position: "right",
+                            style: { background: "#fd7e14" },
                             stopOnFocus: true
                         }).showToast();
                     } else {

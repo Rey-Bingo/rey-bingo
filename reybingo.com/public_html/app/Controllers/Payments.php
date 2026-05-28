@@ -46,6 +46,112 @@ class Payments extends Controller {
         return $this->response->setContentType('image/png')->setBody($png);
     }
 
+    public function createStripeCheckoutSession()
+    {
+        if (!session()->get('id')) {
+            return $this->response->setStatusCode(401)->setJSON([
+                'success' => false,
+                'message' => 'Usuario no autenticado',
+            ]);
+        }
+
+        $amount = (float) $this->request->getPost('amount');
+        if ($amount <= 0) {
+            return $this->response->setStatusCode(422)->setJSON([
+                'success' => false,
+                'message' => 'Monto inválido',
+            ]);
+        }
+
+        if (systemGet('activateDeposit') == 1) {
+            if ($amount < (float) systemGet('minimumDeposit')) {
+                return $this->response->setStatusCode(422)->setJSON([
+                    'success' => false,
+                    'message' => 'El monto mínimo de depósito es ' . systemGet('minimumDeposit') . ' ' . systemGet('currency'),
+                ]);
+            }
+            if ($amount > (float) systemGet('maximumDeposit')) {
+                return $this->response->setStatusCode(422)->setJSON([
+                    'success' => false,
+                    'message' => 'El monto máximo de depósito es ' . systemGet('maximumDeposit') . ' ' . systemGet('currency'),
+                ]);
+            }
+        }
+
+        $secretKey = env('stripe.secretKey', systemGet('secretStripe') ?: '');
+        if ($secretKey === '') {
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'message' => 'Stripe no está configurado',
+            ]);
+        }
+
+        $userId = (int) session()->get('id');
+        $reference = uniqid('st_', true);
+        $currency = strtolower((string) (env('stripe.currency', systemGet('stripeCurrency') ?: 'usd')));
+        $amountCents = (int) round($amount * 100);
+
+        $postFields = http_build_query([
+            'mode' => 'payment',
+            'success_url' => site_url('payments/stripe/success') . '?session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url' => site_url('payments/stripe/cancel'),
+            'client_reference_id' => (string) $userId,
+            'metadata[user_id]' => (string) $userId,
+            'metadata[amount]' => number_format($amount, 2, '.', ''),
+            'metadata[reference]' => $reference,
+            'line_items[0][quantity]' => 1,
+            'line_items[0][price_data][currency]' => $currency,
+            'line_items[0][price_data][unit_amount]' => $amountCents,
+            'line_items[0][price_data][product_data][name]' => 'Recarga de billetera',
+        ]);
+
+        $ch = curl_init('https://api.stripe.com/v1/checkout/sessions');
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $postFields,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $secretKey,
+                'Content-Type: application/x-www-form-urlencoded',
+            ],
+        ]);
+
+        $result = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlError) {
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'message' => 'Error de conexión con Stripe',
+            ]);
+        }
+
+        $decoded = json_decode((string) $result, true);
+        if ($httpCode >= 400 || empty($decoded['url'])) {
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'message' => $decoded['error']['message'] ?? 'No se pudo crear la sesión de pago',
+            ]);
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'url' => $decoded['url'],
+        ]);
+    }
+
+    public function stripeSuccess()
+    {
+        return redirect()->to('/payments')->with('success', 'Pago completado. Estamos procesando la acreditación.');
+    }
+
+    public function stripeCancel()
+    {
+        return redirect()->to('/payments')->with('error', 'Pago cancelado.');
+    }
+
     public function index() {
         
         $modelGames = new GamesModel();
@@ -909,24 +1015,16 @@ class Payments extends Controller {
 
     public function depositPaypalSubmit() {
         $modelDeposits = new DepositsModel();
+        $modelUsers = new UsersModel();
 
         $amount = $this->request->getPost('amount');
         $paymentID = $this->request->getPost('paymentID');
         $paymentToken = $this->request->getPost('paymentToken');
         $payerID = $this->request->getPost('payerID');
 
-        $paypal = json_decode(systemGet('paypal'), true);
-
-        /*if ($paypal[0]['mode'] == 'sandbox') {
-            $paypalClientID = $paypal[0]['sandbox_client_id'];
-            $paypalSecret = $paypal[0]['sandbox_secret_key'];
-        } else {
-            $paypalClientID = $paypal[0]['production_client_id'];
-            $paypalSecret = $paypal[0]['production_secret_key'];
-        }*/
-
-        $paypalClientID = systemGet('idPayPal');
-        $paypalSecret = systemGet('secretPayPal');
+        $paypalCredentials = paypalCredentials();
+        $paypalClientID = $paypalCredentials['client_id'];
+        $paypalSecret = $paypalCredentials['secret'];
 
         $payid = $modelDeposits->paypalPayment($paymentID, $paymentToken, $payerID, $paypalClientID, $paypalSecret);
 
@@ -945,8 +1043,26 @@ class Payments extends Controller {
             'status'    => 2
         ];
 
-        $model->insert($data);
-        $paymentId = $model->insertID();
+        $existing = $modelDeposits->where('reference', $paymentID)->first();
+        if ($existing) {
+            return $this->response->setJSON([
+                'success' => true,
+                'newRecharge' => [
+                    'type'      => translate('paypal'),
+                    'date'      => date('Y-m-d'),
+                    'amount'    => $amount,
+                    'reference' => $paymentID,
+                    'bank'      => 'N/A',
+                ]
+            ]);
+        }
+
+        $modelDeposits->insert($data);
+        $paymentId = $modelDeposits->insertID();
+
+        if ($paymentId) {
+            wallet_credit_recharge((int) session()->get('id'), (float) $amount);
+        }
 
         $response = [
             'success' => true,
@@ -990,7 +1106,7 @@ class Payments extends Controller {
     public function retireGet() {
         $modelUsers = new UsersModel();
 
-        $data['user'] = $modelUsers->find(session()->get('id'));
+        $data['user'] = wallet_service()->normalizeUser($modelUsers->find(session()->get('id')));
 
         return view('users/retire', $data);
     }
@@ -1050,9 +1166,9 @@ class Payments extends Controller {
         if (! wallet_kyc_allows_withdraw($user)) {
             return $this->response->setJSON([
                 'success' => false,
-                'errors' => [
-                    'retire-amount' => 'Debe completar la verificación KYC antes de retirar. Visite /kyc',
-                ],
+                'kyc_required' => true,
+                'message' => wallet_kyc_withdraw_message($user),
+                'kyc_url' => site_url('kyc'),
             ]);
         }
 

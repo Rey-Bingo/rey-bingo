@@ -16,9 +16,40 @@ class PaymentWebhook extends Controller
      */
     public function gateway(string $gateway = 'generic')
     {
+        $rawBody = $this->request->getBody();
         $payload = $this->request->getJSON(true);
         if (empty($payload)) {
             $payload = $this->request->getPost();
+        }
+
+        if ($gateway === 'stripe') {
+            if (!empty($rawBody)) {
+                $stripeEvent = json_decode($rawBody, true);
+                if (is_array($stripeEvent) && isset($stripeEvent['type'])) {
+                    $endpointSecret = env('stripe.webhookSecret', systemGet('stripeWebhookSecret') ?: '');
+                    if ($endpointSecret !== '') {
+                        $signatureHeader = $this->request->getHeaderLine('Stripe-Signature');
+                        if (! $this->validateStripeSignature($rawBody, $signatureHeader, $endpointSecret)) {
+                            return $this->response->setStatusCode(401)->setJSON([
+                                'success' => false,
+                                'message' => 'Firma Stripe inválida',
+                            ]);
+                        }
+                    }
+
+                    $eventType = (string) ($stripeEvent['type'] ?? '');
+                    $eventData = $stripeEvent['data']['object'] ?? [];
+                    if (in_array($eventType, ['checkout.session.completed', 'payment_intent.succeeded'], true)) {
+                        $metadata = is_array($eventData['metadata'] ?? null) ? $eventData['metadata'] : [];
+                        $payload = [
+                            'status' => 'completed',
+                            'user_id' => (int) ($metadata['user_id'] ?? $eventData['client_reference_id'] ?? 0),
+                            'amount' => (float) ($metadata['amount'] ?? ((float) ($eventData['amount_total'] ?? $eventData['amount_received'] ?? 0) / 100)),
+                            'reference' => (string) ($metadata['reference'] ?? $eventData['id'] ?? uniqid('st_', true)),
+                        ];
+                    }
+                }
+            }
         }
 
         if (empty($payload)) {
@@ -111,5 +142,30 @@ class PaymentWebhook extends Controller
             'deposit_id' => $depositId,
             'message'    => 'Depósito acreditado en wallet_recharge',
         ]);
+    }
+
+    private function validateStripeSignature(string $payload, string $signatureHeader, string $secret): bool
+    {
+        if ($signatureHeader === '' || $secret === '') {
+            return false;
+        }
+
+        $parts = [];
+        foreach (explode(',', $signatureHeader) as $part) {
+            $kv = explode('=', trim($part), 2);
+            if (count($kv) === 2) {
+                $parts[$kv[0]] = $kv[1];
+            }
+        }
+
+        $timestamp = $parts['t'] ?? null;
+        $v1 = $parts['v1'] ?? null;
+        if (! $timestamp || ! $v1) {
+            return false;
+        }
+
+        $signedPayload = $timestamp . '.' . $payload;
+        $expected = hash_hmac('sha256', $signedPayload, $secret);
+        return hash_equals($expected, $v1);
     }
 }

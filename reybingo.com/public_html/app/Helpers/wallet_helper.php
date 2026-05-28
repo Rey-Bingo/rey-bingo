@@ -51,6 +51,42 @@ if (! function_exists('wallet_kyc_allows_withdraw')) {
     }
 }
 
+if (! function_exists('wallet_kyc_withdraw_message')) {
+    function wallet_kyc_withdraw_message(array $user): string
+    {
+        $status = (string) ($user['kyc_status'] ?? 'pending');
+        $hasDocs = ! empty($user['kyc_front']) && ! empty($user['kyc_back']);
+
+        if ($status === 'rejected') {
+            return 'Tu verificación fue rechazada. Sube de nuevo las fotos de tu documento (frente y reverso) para poder retirar.';
+        }
+
+        if ($status === 'pending' && $hasDocs) {
+            return 'Ya enviaste tus documentos. Estamos revisando tu identidad; podrás retirar cuando sea aprobada.';
+        }
+
+        return 'Antes de retirar debes verificar tu identidad subiendo una foto de tu documento por ambos lados.';
+    }
+}
+
+if (! function_exists('wallet_kyc_action_label')) {
+    function wallet_kyc_action_label(array $user): string
+    {
+        $status = (string) ($user['kyc_status'] ?? 'pending');
+        $hasDocs = ! empty($user['kyc_front']) && ! empty($user['kyc_back']);
+
+        if ($status === 'rejected') {
+            return 'Corregir verificación';
+        }
+
+        if ($status === 'pending' && $hasDocs) {
+            return 'Ver estado de verificación';
+        }
+
+        return 'Verificar mi identidad';
+    }
+}
+
 if (! function_exists('wallet_deduct_withdrawable')) {
     function wallet_deduct_withdrawable(int $userId, float $amount): bool
     {

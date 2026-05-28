@@ -10,7 +10,8 @@
                 <?= csrf_field() ?>
 
                 <?php 
-                    $paypal = json_decode(systemGet('paypal'), true);
+                    $paypalCredentials = paypalCredentials();
+                    $stripeEnabled = (systemGet('activateStripe') == 1) || (systemGet('secretStripe') != '') || (env('stripe.secretKey') != '');
                 ?>
                 
                 <div class="row" id="deposit-wallet">
@@ -39,6 +40,9 @@
                                 <option value=""><?= translate('payment method'); ?></option>
                                 <?php if (systemGet('activatePayPal') == 1) : ?>
                                 <option value="paypal"><?= translate('paypal'); ?></option>
+                                <?php endif; ?>
+                                <?php if ($stripeEnabled) : ?>
+                                <option value="stripe">Stripe</option>
                                 <?php endif; ?>
                                 <option <?= systemGet('method') == 'transfer' ? 'selected' : '' ?> value="transfer"><?= translate('transfer'); ?></option>
                                 <option <?= systemGet('method') == 'mobile payment' ? 'selected' : '' ?> value="mobile payment"><?= translate('mobile payment'); ?></option>
@@ -176,6 +180,16 @@
                     </div>
 
                     <div class="pt-2 text-center" id="paypal-button" style="display: none;"></div>
+                    <div class="row" id="deposit-stripe-amount" style="display: none;">
+                        <div class="col-md-12 mb-1">
+                            <label for="stripe-amount" class="form-label"><?= translate('amount'); ?></label>
+                            <input type="number" class="form-control form-control-lg form-bingo" name="stripe-amount" id="stripe-amount" placeholder="<?= translate('enter a'); ?> <?= strtolower(translate('amount')); ?>" autocomplete="off" min="1" step="0.01">
+                            <small id="stripe-amount-error" class="text-danger d-none"></small>
+                        </div>
+                        <div class="col-md-12">
+                            <button type="button" class="btn btn-primary d-block w-50 btn-bingo mt-2" id="stripe-button">Pagar con Stripe</button>
+                        </div>
+                    </div>
                 </div>
             <?= form_close(); ?>
         </div>
@@ -189,12 +203,21 @@
         if (method == "paypal") {
             $("#paypal-button").show();
             $("#deposit-paypal-amount").show();
+            $("#deposit-stripe-amount").hide();
+            $("#deposit-method-bank").hide();
+            $("#deposit-info-bank").hide();
+            $("#step-deposit-button").hide();
+        } else if (method == "stripe") {
+            $("#paypal-button").hide();
+            $("#deposit-paypal-amount").hide();
+            $("#deposit-stripe-amount").show();
             $("#deposit-method-bank").hide();
             $("#deposit-info-bank").hide();
             $("#step-deposit-button").hide();
         } else {
             $("#paypal-button").hide();
             $("#deposit-paypal-amount").hide();
+            $("#deposit-stripe-amount").hide();
             $("#deposit-method-bank").show();
             $("#deposit-info-bank").show();
             $("#step-deposit-button").show();
@@ -226,6 +249,7 @@
                     if (response.success) {
                         if (response.paypal) {
                             $("#paypal-button").show();
+                            $("#deposit-stripe-amount").hide();
                             $("#deposit-method-bank").hide();
                             $("#deposit-info-bank").hide();
                             $("#step-deposit-button").hide();
@@ -326,9 +350,60 @@
                 }
             });
         });
+
+        $('#stripe-button').on('click', function() {
+            const button = $('#stripe-button');
+            const amount = parseFloat($('#stripe-amount').val() || '0');
+            $('#stripe-amount-error').addClass('d-none').text('');
+
+            if (!amount || amount <= 0) {
+                $('#stripe-amount-error').removeClass('d-none').text("<?= translate('the amount must be greater than 0'); ?>");
+                return;
+            }
+
+            button.prop('disabled', true);
+            $.ajax({
+                url: '<?= site_url('payments/stripe/create') ?>',
+                method: 'POST',
+                dataType: 'json',
+                data: {
+                    amount: amount,
+                    <?= csrf_token(); ?>: '<?= csrf_hash(); ?>'
+                },
+                success: function(response) {
+                    if (response.success && response.url) {
+                        window.location.href = response.url;
+                        return;
+                    }
+
+                    Toastify({
+                        text: response.message || "<?= translate('error processing payment'); ?>",
+                        duration: 3000,
+                        gravity: "top",
+                        position: "right",
+                        style: { background: "#dc3545" },
+                        stopOnFocus: true
+                    }).showToast();
+                },
+                error: function(xhr) {
+                    const message = xhr.responseJSON?.message || "<?= translate('there was an error in the request to the server'); ?>";
+                    Toastify({
+                        text: message,
+                        duration: 3000,
+                        gravity: "top",
+                        position: "right",
+                        style: { background: "#dc3545" },
+                        stopOnFocus: true
+                    }).showToast();
+                },
+                complete: function() {
+                    button.prop('disabled', false);
+                }
+            });
+        });
   
         paypal.Button.render({
-            env: 'production', // 'sandbox' o 'production'
+            env: '<?= esc($paypalCredentials['env'], 'js') ?>',
             style: {
                 label: 'paypal',
                 size: 'medium',
@@ -345,11 +420,34 @@
             },
 
             client: {
-                sandbox: '<?= systemGet('idPayPal'); ?>',
-                production: '<?= systemGet('idPayPal'); ?>'
+                sandbox: '<?= esc($paypalCredentials['sandbox_client_id'], 'js') ?>',
+                production: '<?= esc($paypalCredentials['production_client_id'], 'js') ?>'
             },
 
             commit: true,
+
+            onError: function(err) {
+                console.error('PayPal error:', err);
+                Toastify({
+                    text: "No se pudo abrir PayPal. Verifica que el Client ID coincida con el modo <?= esc($paypalCredentials['env'], 'js') ?>.",
+                    duration: 4000,
+                    gravity: "top",
+                    position: "right",
+                    style: { background: "#dc3545" },
+                    stopOnFocus: true
+                }).showToast();
+            },
+
+            onCancel: function() {
+                Toastify({
+                    text: "Pago cancelado en PayPal.",
+                    duration: 2500,
+                    gravity: "top",
+                    position: "right",
+                    style: { background: "#6c757d" },
+                    stopOnFocus: true
+                }).showToast();
+            },
 
             payment: function (data, actions) {
                 var amountPaypal = parseFloat($("#paypal-amount").val()) || 0;

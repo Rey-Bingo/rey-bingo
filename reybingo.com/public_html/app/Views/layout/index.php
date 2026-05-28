@@ -76,116 +76,6 @@
         <input type="hidden" name="sounds" id="sounds" value="0">
     <?php endif; ?>
 
-    <!-- Agregar esto a tu vista principal -->
-    <div id="notification-banner" class="notification-banner hidden" style="display: none;">
-        <div class="banner-content">
-            <div class="banner-icon">🔔</div>
-            <div class="banner-text">
-                <h4>¡No te pierdas ningún juego!</h4>
-                <p>Activa las notificaciones para recibir alertas de nuevas partidas de bingo</p>
-            </div>
-            <div class="banner-buttons">
-                <button id="enable-notifications" class="btn btn-primary">
-                    Activar Notificaciones
-                </button>
-                <button id="dismiss-banner" class="btn btn-secondary">
-                    Ahora no
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal de explicación -->
-    <div id="notification-modal" class="modal fade hidden" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">🔔 Notificaciones de Bingo</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="text-center mb-3">
-                        <img src="<?= site_url('assets/img/logo.png'); ?>" alt="img" class="img-fluid w-50">
-                    </div>
-                    <h6>¿Qué notificaciones recibirás?</h6>
-                    <ul>
-                        <li>✅ Nuevas partidas de bingo disponibles</li>
-                        <li>🎯 Recordatorios antes de que inicie un juego</li>
-                        <li>🏆 Resultados de partidas</li>
-                        <li>💰 Premios ganados</li>
-                    </ul>
-                    <div class="alert alert-info">
-                        <small>
-                            <strong>Tu privacidad es importante:</strong> Solo recibirás notificaciones relacionadas con el bingo. 
-                            Puedes desactivarlas en cualquier momento.
-                        </small>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" id="confirm-notifications" class="btn btn-primary">
-                        🔔 Sí, activar notificaciones
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <style>
-        .notification-banner {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            z-index: 1000;
-            animation: slideDown 0.3s ease-out;
-        }
-
-        @keyframes slideDown {
-            from { transform: translateY(-100%); }
-            to { transform: translateY(0); }
-        }
-
-        .banner-content {
-            display: flex;
-            align-items: center;
-            max-width: 1200px;
-            margin: 0 auto;
-            gap: 15px;
-        }
-
-        .banner-icon {
-            font-size: 2rem;
-        }
-
-        .banner-text h4 {
-            margin: 0;
-            font-size: 1.1rem;
-        }
-
-        .banner-text p {
-            margin: 0;
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-
-        .banner-buttons {
-            display: flex;
-            gap: 10px;
-        }
-
-        @media (max-width: 768px) {
-            .banner-content {
-                flex-direction: column;
-                text-align: center;
-                gap: 10px;
-            }
-        }
-    </style>
 
     <div class="modal fade" id="wallet" tabindex="-1" role="dialog"></div>
 
@@ -822,7 +712,9 @@
                     notificationEl.classList.add('show');
                 }, 100);
 
-                attachNotificationSwipeDismiss(notificationEl, hideNotification);
+                if (typeof attachNotificationSwipeDismiss === 'function') {
+                    attachNotificationSwipeDismiss(notificationEl, hideNotification);
+                }
                 
                 notificationEl._autoHideTimer = setTimeout(() => {
                     hideNotification(notificationEl);

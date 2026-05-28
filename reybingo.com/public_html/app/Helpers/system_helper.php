@@ -111,3 +111,40 @@ if (!function_exists('translate_time')) {
         return ucfirst($formattedDate);
     }
 }
+
+if (! function_exists('paypalCredentials')) {
+    /**
+     * Credenciales PayPal alineadas con el modo sandbox/production.
+     *
+     * @return array{env:string,sandbox_client_id:string,production_client_id:string,client_id:string,secret:string}
+     */
+    function paypalCredentials(): array
+    {
+        $paypalConfig = json_decode((string) systemGet('paypal'), true);
+        $config = is_array($paypalConfig[0] ?? null) ? $paypalConfig[0] : [];
+
+        $env = (string) ($config['mode'] ?? 'production');
+        if (! in_array($env, ['sandbox', 'production'], true)) {
+            $env = 'production';
+        }
+
+        $sandboxClientId = (string) ($config['sandbox_client_id'] ?? systemGet('idPayPal') ?? '');
+        $productionClientId = (string) ($config['production_client_id'] ?? systemGet('idPayPal') ?? '');
+        $sandboxSecret = (string) ($config['sandbox_secret_key'] ?? systemGet('secretPayPal') ?? '');
+        $productionSecret = (string) ($config['production_secret_key'] ?? systemGet('secretPayPal') ?? '');
+
+        $host = (string) (parse_url((string) base_url(), PHP_URL_HOST) ?: '');
+        $isLocalHost = in_array($host, ['localhost', '127.0.0.1', '::1'], true);
+        if (ENVIRONMENT === 'development' && $isLocalHost && $sandboxClientId !== '') {
+            $env = 'sandbox';
+        }
+
+        return [
+            'env' => $env,
+            'sandbox_client_id' => $sandboxClientId,
+            'production_client_id' => $productionClientId,
+            'client_id' => $env === 'sandbox' ? $sandboxClientId : $productionClientId,
+            'secret' => $env === 'sandbox' ? $sandboxSecret : $productionSecret,
+        ];
+    }
+}
